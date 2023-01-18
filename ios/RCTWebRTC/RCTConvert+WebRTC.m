@@ -9,7 +9,6 @@
 + (RTCSessionDescription *)RTCSessionDescription:(id)json
 {
   if (!json) {
-    RCTLogConvertError(json, @"must not be null");
     return nil;
   }
 
@@ -43,6 +42,16 @@
 
   if (json[@"candidate"] == nil) {
     RCTLogConvertError(json, @".candidate must not be null");
+    return nil;
+  }
+  
+  if (json[@"sdpMid"] == nil) {
+    RCTLogConvertError(json, @".sdpMid must not be null");
+    return nil;
+  }
+
+  if (json[@"sdpMLineIndex"] == nil) {
+    RCTLogConvertError(json, @".sdpMLineIndex must not be null");
     return nil;
   }
 
@@ -90,8 +99,7 @@
   // Required for perfect negotiation.
   config.enableImplicitRollback = YES;
 
-  // Plan B, just a little longer.
-  config.sdpSemantics = RTCSdpSemanticsPlanB;
+  config.sdpSemantics = RTCSdpSemanticsUnifiedPlan;
 
   if (!json) {
     return config;

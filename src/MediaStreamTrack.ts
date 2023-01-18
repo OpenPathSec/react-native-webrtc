@@ -1,12 +1,12 @@
 
+import { defineCustomEventTarget, Event } from 'event-target-shim';
 import { NativeModules } from 'react-native';
-import { defineCustomEventTarget } from 'event-target-shim';
 
 import { deepClone } from './RTCUtil';
 
 const { WebRTCModule } = NativeModules;
 
-const MEDIA_STREAM_TRACK_EVENTS = ['ended', 'mute', 'unmute'];
+const MEDIA_STREAM_TRACK_EVENTS = [ 'ended', 'mute', 'unmute' ];
 
 type MediaStreamTrackState = 'live' | 'ended';
 
@@ -15,12 +15,13 @@ class MediaStreamTrack extends defineCustomEventTarget(...MEDIA_STREAM_TRACK_EVE
     _enabled: boolean;
     _settings: object;
     _muted: boolean;
+    _peerConnectionId: number;
+    _readyState: MediaStreamTrackState;
 
-    id: string;
-    kind: string;
-    label: string;
-    readyState: MediaStreamTrackState;
-    remote: boolean;
+    readonly id: string;
+    readonly kind: string;
+    readonly label: string = '';
+    readonly remote: boolean;
 
     constructor(info) {
         super();
@@ -29,14 +30,12 @@ class MediaStreamTrack extends defineCustomEventTarget(...MEDIA_STREAM_TRACK_EVE
         this._enabled = info.enabled;
         this._settings = info.settings || {};
         this._muted = false;
+        this._peerConnectionId = info.peerConnectionId;
+        this._readyState = info.readyState;
 
         this.id = info.id;
         this.kind = info.kind;
-        this.label = info.label;
         this.remote = info.remote;
-
-        const _readyState = info.readyState.toLowerCase();
-        this.readyState = _readyState === 'initializing' || _readyState === 'live' ? 'live' : 'ended';
     }
 
     get enabled(): boolean {
@@ -47,6 +46,7 @@ class MediaStreamTrack extends defineCustomEventTarget(...MEDIA_STREAM_TRACK_EVE
         if (enabled === this._enabled) {
             return;
         }
+
         WebRTCModule.mediaStreamTrackSetEnabled(this.id, !this._enabled);
         this._enabled = !this._enabled;
     }
@@ -55,9 +55,13 @@ class MediaStreamTrack extends defineCustomEventTarget(...MEDIA_STREAM_TRACK_EVE
         return this._muted;
     }
 
+    get readyState(): string {
+        return this._readyState;
+    }
+
     stop(): void {
         WebRTCModule.mediaStreamTrackSetEnabled(this.id, false);
-        this.readyState = 'ended';
+        this._readyState = 'ended';
         // TODO: save some stopped flag?
     }
 
@@ -72,10 +76,39 @@ class MediaStreamTrack extends defineCustomEventTarget(...MEDIA_STREAM_TRACK_EVE
         if (this.remote) {
             throw new Error('Not implemented for remote tracks');
         }
+
         if (this.kind !== 'video') {
             throw new Error('Only implemented for video tracks');
         }
+
         WebRTCModule.mediaStreamTrackSwitchCamera(this.id);
+    }
+
+    _setVideoEffect(name:string) {
+        if (this.remote) {
+            throw new Error('Not implemented for remote tracks');
+        }
+
+        if (this.kind !== 'video') {
+            throw new Error('Only implemented for video tracks');
+        }
+
+        WebRTCModule.mediaStreamTrackSetVideoEffect(this.id, name);
+    }
+
+    /**
+     * Internal function which is used to set the muted state on remote tracks and
+     * emit the mute / unmute event.
+     *
+     * @param muted Whether the track should be marked as muted / unmuted.
+     */
+    _setMutedInternal(muted: boolean) {
+        if (!this.remote) {
+            throw new Error('Track is not remote!');
+        }
+
+        this._muted = muted;
+        this.dispatchEvent(new Event(muted ? 'mute' : 'unmute'));
     }
 
     applyConstraints(): never {
